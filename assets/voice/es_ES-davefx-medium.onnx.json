@@ -4,7 +4,7 @@
     "quality": "medium"
   },
   "espeak": {
-    "voice": "es-419"
+    "voice": "es"
   },
   "inference": {
     "noise_scale": 0.667,
@@ -469,12 +469,6 @@
     ],
     "↑": [
       151
-    ],
-    "̺": [
-      152
-    ],
-    "̻": [
-      153
     ]
   },
   "num_symbols": 256,
@@ -482,12 +476,12 @@
   "speaker_id_map": {},
   "piper_version": "1.0.0",
   "language": {
-    "code": "es_MX",
+    "code": "es_ES",
     "family": "es",
-    "region": "MX",
+    "region": "ES",
     "name_native": "Español",
     "name_english": "Spanish",
-    "country_english": "Mexico"
+    "country_english": "Spain"
   },
-  "dataset": "ald"
+  "dataset": "davefx"
 }
