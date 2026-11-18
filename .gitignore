@@ -1,0 +1,3 @@
+.work/
+assets/voice/*.onnx
+__pycache__/
