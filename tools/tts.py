@@ -1,10 +1,10 @@
-"""Narración con Piper (voz neuronal offline es_MX)."""
+"""Narración con Piper (voz neuronal offline es_ES davefx)."""
 import os, re, wave, json
 from piper import PiperVoice, SynthesisConfig
 from content import PRONUNCIATION
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODEL = os.path.join(ROOT, "assets", "voice", "es_MX-ald-medium.onnx")
+MODEL = os.path.join(ROOT, "assets", "voice", "es_ES-davefx-medium.onnx")
 _voice = None
 
 

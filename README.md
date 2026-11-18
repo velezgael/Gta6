@@ -57,9 +57,9 @@ Los guiones están en `tools/content.py`. Añade un vídeo a la lista y ejecuta:
 
 ```bash
 pip install piper-tts soundfile scipy numpy pillow
-# voz es_MX-ald-medium (no está incluida en el repo por su tamaño):
-curl -L https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-es_MX-ald-medium.tar.bz2 | tar xj
-cp vits-piper-es_MX-ald-medium/es_MX-ald-medium.onnx* assets/voice/
+# voz es_ES-davefx-medium (no está incluida en el repo por su tamaño):
+curl -L https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-es_ES-davefx-medium.tar.bz2 | tar xj
+cp vits-piper-es_ES-davefx-medium/es_ES-davefx-medium.onnx* assets/voice/
 cd tools && python3 build.py 11      # o: python3 build.py all
 ```
 
