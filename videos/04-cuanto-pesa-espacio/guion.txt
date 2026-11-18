@@ -3,22 +3,22 @@
   GTA 6 pesa alrededor de 212 gigas. Y en muchas consolas, eso es un problema.
   Te enseño cuánto espacio tienes de verdad, y cómo liberarlo sin perder tus partidas.
 
-[0:13] ESPACIO REAL DE TU CONSOLA
+[0:11] ESPACIO REAL DE TU CONSOLA
   Una PS5 original tiene un disco de 825 gigas, pero solo unos 667 son utilizables.
   La PS5 Slim trae un tera, con unos 848 gigas útiles.
   La Series X ronda los 802 gigas libres de fábrica.
   Y la Series S de 512 gigas se queda en unos 364. Con GTA 6, más de la mitad se va en un solo juego.
 
-[0:42] PASO 1: LIBERAR ESPACIO
+[0:35] PASO 1: LIBERAR ESPACIO
   Primero: borrar un juego no borra tu partida si tienes guardado en la nube. En Xbox es automático, y en PS5 viene con PlayStation Plus.
   Entra en almacenamiento y ordena por tamaño. Muchos juegos de disparos ocupan más de cien gigas.
   Y borra capturas y clips de video viejos: a veces son decenas de gigas.
 
-[1:05] PASO 2: AMPLIAR ALMACENAMIENTO
+[0:54] PASO 2: AMPLIAR ALMACENAMIENTO
   En PS5 puedes añadir un SSD M.2 PCIe de cuarta generación. Sony recomienda 5500 megas por segundo o más.
   En Xbox, la solución es la tarjeta de expansión oficial.
   Un disco USB sirve para guardar juegos de nueva generación, pero no para jugarlos desde ahí. Úsalo para mover lo que no estás jugando.
 
-[1:28] FINAL
+[1:14] FINAL
   Haz esto hoy, no a las doce menos cinco de la noche del estreno.
   ¿Cuánto espacio te queda a ti? Cuéntamelo abajo, y suscríbete para más guías de GTA 6.
