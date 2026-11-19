@@ -2,3 +2,6 @@
 assets/voice/*.onnx
 __pycache__/
 descargas/
+clipper/models/
+clipper/output/
+clipper/input/
