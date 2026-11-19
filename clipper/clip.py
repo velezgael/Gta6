@@ -185,42 +185,93 @@ def pick_clips(words, z, hop, dur, n, lo, hi):
     return sorted(chosen, key=lambda c: c[1])
 
 
+def hot_zones(z, hop, dur, k=30, win=80.0):
+    """Zonas más intensas repartidas por todo el directo: la mejor ventana de cada tramo."""
+    n = int(win / hop)
+    if len(z) <= n:
+        return [(0.0, dur)]
+    # volumen relativo al contexto local (5 min) para no favorecer partes con más ruido de fondo
+    ctx = int(300 / hop)
+    pad = np.pad(z, (ctx, ctx), mode="edge")
+    base = np.convolve(pad, np.ones(2 * ctx + 1) / (2 * ctx + 1), mode="valid")
+    zr = z - base
+    block = len(zr) / k
+    zones = []
+    for j in range(k):
+        a, b = int(j * block), int((j + 1) * block) - n
+        best, bi = -1e9, a
+        for i in range(a, max(a + 1, b), int(5 / hop)):
+            v = float(np.mean(np.sort(zr[i:i + n])[-n // 5:]))
+            if v > best:
+                best, bi = v, i
+        zones.append((bi * hop, bi * hop + win))
+    return zones
+
+
 # ------------------------------------------------------------------ framing
 def face_track(video, st, en, iw, ih, fps):
+    """Devuelve (modo, datos). modo: 'face' (cara grande -> recorte que la sigue),
+    'split' (facecam pequeña sobre gameplay -> cámara arriba, juego abajo) o None."""
     import cv2
-    cas = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    yunet = os.path.join(MODELS, "yunet.onnx")
+    sc = 2 if ih >= 720 else 1
+    if os.path.exists(yunet):
+        fd = cv2.FaceDetectorYN.create(yunet, "", (iw // sc, ih // sc), 0.6, 0.3, 50)
+        def detect(img):
+            _, f = fd.detect(img)
+            return [] if f is None else [tuple(r[:4]) for r in f]
+    else:
+        cas = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        def detect(img):
+            return list(cas.detectMultiScale(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 1.1, 6, minSize=(24, 24)))
     cap = cv2.VideoCapture(video)
-    xs, times = [], []
+    det, times = [], []
     t = st
     while t < en:
         cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
         ok, fr = cap.read()
         if not ok:
             break
-        g = cv2.cvtColor(cv2.resize(fr, (iw // 2, ih // 2)), cv2.COLOR_BGR2GRAY)
-        faces = cas.detectMultiScale(g, 1.15, 6, minSize=(ih // 20, ih // 20))
+        faces = detect(cv2.resize(fr, (iw // sc, ih // sc)))
         if len(faces):
             x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
-            xs.append((x + w / 2) * 2); times.append(t)
+            det.append(((x + w / 2) * sc, (y + h / 2) * sc, h * sc)); times.append(t)
         t += 0.5
     cap.release()
-    if len(xs) < max(2, 0.25 * (en - st) / 0.5):
-        return None  # casi no hay caras -> layout blur
-    # interpolar + suavizar
+    if len(det) < max(2, 0.25 * (en - st) / 0.5):
+        return None, None
+    d = np.array(det)
+    fh = float(np.median(d[:, 2]))
+    if fh < 0.16 * ih:
+        # facecam: caja fija alrededor de la mediana de la cara
+        cx, cy = float(np.median(d[:, 0])), float(np.median(d[:, 1]))
+        bh = min(ih * 0.45, fh * 6.2); bw = min(iw, bh * 16 / 9)
+        x0 = cx - bw / 2; y0 = cy - bh * 0.5
+        # la facecam suele estar pegada a una esquina: ajustar a los bordes cercanos
+        if cx > iw * 0.66: x0 = iw - bw
+        elif cx < iw * 0.33: x0 = 0
+        if cy < ih * 0.33: y0 = 0
+        elif cy > ih * 0.66: y0 = ih - bh
+        x0 = int(np.clip(x0, 0, iw - bw)); y0 = int(np.clip(y0, 0, ih - bh))
+        return "split", (x0, y0, int(bw), int(bh))
     grid = np.arange(st, en, 1 / fps)
-    cx = np.interp(grid, times, xs)
+    cx = np.interp(grid, times, d[:, 0])
     k = int(fps * 1.2)
     cx = np.convolve(np.pad(cx, (k, k), mode="edge"), np.ones(2 * k + 1) / (2 * k + 1), mode="valid")
-    return cx
+    return "face", cx
 
 
 def render_clip(video, st, en, out, iw, ih, fps, layout, ass_path, hook_text=None):
     import cv2
     tmp = out + ".noaudio.mp4"
     cw = int(ih * 9 / 16) // 2 * 2
-    cx = None
-    if layout == "auto" and iw > ih:
-        cx = face_track(video, st, en, iw, ih, fps)
+    cx, mode, box = None, None, None
+    if layout in ("auto", "split") and iw > ih:
+        mode, data = face_track(video, st, en, iw, ih, fps)
+        if mode == "face" and layout == "auto":
+            cx = data
+        elif mode == "split":
+            box = data
     use_crop = cx is not None or (layout == "crop" and iw > ih)
     if layout == "crop" and cx is None:
         cx = np.full(int((en - st) * fps) + 2, iw / 2)
@@ -238,6 +289,16 @@ def render_clip(video, st, en, out, iw, ih, fps, layout, ass_path, hook_text=Non
             canvas = cv2.resize(fr, (W, int(ih * W / iw)))
             canvas = canvas[(canvas.shape[0] - H) // 2:][:H] if canvas.shape[0] >= H else cv2.copyMakeBorder(
                 canvas, (H - canvas.shape[0]) // 2, H - canvas.shape[0] - (H - canvas.shape[0]) // 2, 0, 0, cv2.BORDER_CONSTANT)
+        elif box is not None:  # facecam arriba, juego abajo
+            x0, y0, bw, bh = box
+            top_h = int(W * bh / bw) // 2 * 2
+            top = cv2.resize(fr[y0:y0 + bh, x0:x0 + bw], (W, top_h))
+            bot_h = H - top_h
+            gw = int(ih * W / bot_h)
+            gx = (iw - gw) // 2
+            bot = cv2.resize(fr[:, gx:gx + gw], (W, bot_h))
+            canvas = np.vstack([top, bot])
+            canvas[top_h - 4:top_h + 4] = (0, 229, 255)
         elif use_crop:
             c = int(np.clip(cx[min(i, len(cx) - 1)] - cw / 2, 0, iw - cw))
             canvas = cv2.resize(fr[:, c:c + cw], (W, H), interpolation=cv2.INTER_LINEAR)
@@ -348,15 +409,18 @@ def suggest(ws):
     return title, tags, text
 
 
-def download(url, section=None):
+def download(url, section=None, fmt="bv*[height<=1080]+ba/b[height<=1080]/b", name=None):
     """Descarga un enlace (YouTube, Twitch, Kick…) con yt-dlp a input/ (máx. 1080p)."""
     os.makedirs(os.path.join(HERE, "input"), exist_ok=True)
-    tpl = os.path.join(HERE, "input", "%(uploader,channel)s_%(id)s" + ("_" + section.replace(":", "").replace("-", "_") if section else "") + ".%(ext)s")
-    cmd = [sys.executable, "-m", "yt_dlp", "-f", "bv*[height<=1080]+ba/b[height<=1080]/b", "--merge-output-format", "mp4",
+    tpl = os.path.join(HERE, "input", (name or "%(uploader,channel)s_%(id)s") + ("_" + section.replace(":", "").replace("-", "_") if section else "") + ".%(ext)s")
+    cmd = [sys.executable, "-m", "yt_dlp", "-f", fmt, "--merge-output-format", "mp4", "-N", "8",
            "-o", tpl, "--print", "after_move:filepath", "--no-playlist", "--no-progress"]
     if section:
         cmd += ["--download-sections", "*" + section, "--force-keyframes-at-cuts"]
-    out = subprocess.run(cmd + [url], capture_output=True, text=True)
+    env = dict(os.environ)
+    if env.get("HTTPS_PROXY") and not env.get("http_proxy"):
+        env["http_proxy"] = env["HTTPS_PROXY"]  # ffmpeg solo lee http_proxy
+    out = subprocess.run(cmd + [url], capture_output=True, text=True, env=env)
     if out.returncode != 0:
         sys.exit("No se pudo descargar: " + out.stderr.strip().splitlines()[-1] if out.stderr.strip() else "error desconocido")
     return out.stdout.strip().splitlines()[-1]
@@ -370,13 +434,21 @@ def main():
     ap.add_argument("--lang", default="", help="es, en… (vacío = automático)")
     ap.add_argument("--min", type=float, default=20)
     ap.add_argument("--max", type=float, default=45)
-    ap.add_argument("--layout", default="auto", choices=["auto", "crop", "blur"])
+    ap.add_argument("--layout", default="auto", choices=["auto", "crop", "blur", "split"])
     ap.add_argument("--at", action="append", help="momento concreto HH:MM:SS-HH:MM:SS (repetible)")
     ap.add_argument("--hook", action="store_true", help="texto gancho arriba los primeros segundos")
+    ap.add_argument("--rapido", action="store_true", help="directos largos: analiza en baja calidad, descarga solo los clips en 1080p")
+    ap.add_argument("--zonas", type=int, default=30, help="modo rápido: zonas intensas a transcribir")
     a = ap.parse_args()
+    url = None
     if re.match(r"https?://", a.video):
-        print("Descargando…", flush=True)
-        a.video = download(a.video, a.tramo)
+        url = a.video
+        if a.rapido:
+            print("Descargando versión ligera para analizar…", flush=True)
+            a.video = download(url, a.tramo, fmt="worst[height>=144]/worst", name="analisis_%(id)s")
+        else:
+            print("Descargando…", flush=True)
+            a.video = download(url, a.tramo)
         print("Descargado:", a.video)
 
     name = re.sub(r"[^\w-]+", "_", os.path.splitext(os.path.basename(a.video))[0])[:40]
@@ -388,11 +460,15 @@ def main():
     if not os.path.exists(wav):
         extract_audio(a.video, wav)
     x, sr = sf.read(wav, dtype="float32")
+    z, hop = loudness(x, sr)
     print("Detectando voz…")
     segs = vad_segments(x, sr)
+    if a.rapido and not a.at:
+        zones = hot_zones(z, hop, dur, a.zonas)
+        segs = [s_ for s_ in segs if any(za <= s_[0] < zb for za, zb in zones)]
+        print(f"Modo rápido: {len(zones)} zonas intensas")
     print(f"Transcribiendo {len(segs)} fragmentos…")
     words = transcribe(x, sr, segs, a.lang, os.path.join(od, "transcripcion.json"))
-    z, hop = loudness(x, sr)
     if a.at:
         clips = [(0, parse_ts(s.split("-")[0]), parse_ts(s.split("-")[1])) for s in a.at]
     else:
@@ -405,7 +481,13 @@ def main():
         make_ass(words, st, en, ass, title if a.hook else None)
         out = os.path.join(od, f"clip_{i:02d}.mp4")
         print(f"[{i}/{len(clips)}] {ts(st)} → {ts(en)}  (puntuación {sc:.2f})", flush=True)
-        render_clip(a.video, st, en, out, iw, ih, fps, a.layout, ass)
+        if url and a.rapido:
+            hq = download(url, f"{ts(st - 1)}-{ts(en + 1)}", name=f"hq_{i:02d}_%(id)s")
+            hw, hh, hfps, _ = probe(hq)
+            make_ass([dict(w, s=w["s"] - st + 1, e=w["e"] - st + 1) for w in words], 1, en - st + 1, ass, title if a.hook else None)
+            render_clip(hq, 1, en - st + 1, out, hw, hh, hfps, a.layout, ass)
+        else:
+            render_clip(a.video, st, en, out, iw, ih, fps, a.layout, ass)
         thumbnail(out, z, hop, st, en, os.path.join(od, f"clip_{i:02d}.jpg"), title)
         report += [f"=== CLIP {i:02d} · {ts(st)} → {ts(en)} ({en - st:.0f}s) · puntuación {sc:.2f}",
                    f"TÍTULO SUGERIDO: {title}", f"HASHTAGS: {' '.join(tags)}", f"TRANSCRIPCIÓN: {text}", ""]
