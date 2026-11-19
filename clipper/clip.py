@@ -225,7 +225,7 @@ def face_track(video, st, en, iw, ih, fps):
         def detect(img):
             return list(cas.detectMultiScale(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 1.1, 6, minSize=(24, 24)))
     cap = cv2.VideoCapture(video)
-    det, times = [], []
+    det, times, allf = [], [], []
     t = st
     while t < en:
         cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
@@ -233,32 +233,74 @@ def face_track(video, st, en, iw, ih, fps):
         if not ok:
             break
         faces = detect(cv2.resize(fr, (iw // sc, ih // sc)))
+        allf.append([((x + w / 2) * sc, (y + h / 2) * sc, h * sc) for x, y, w, h in faces])
         if len(faces):
             x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
             det.append(((x + w / 2) * sc, (y + h / 2) * sc, h * sc)); times.append(t)
         t += 0.5
     cap.release()
-    if len(det) < max(2, 0.25 * (en - st) / 0.5):
-        return None, None
-    d = np.array(det)
-    fh = float(np.median(d[:, 2]))
-    if fh < 0.16 * ih:
-        # facecam: caja fija alrededor de la mediana de la cara
-        cx, cy = float(np.median(d[:, 0])), float(np.median(d[:, 1]))
+    nfr = max(1, len(allf))
+    # 1) facecam: una cara pequeña que se repite en la misma posición cerca de un borde lateral
+    flat = [f for fs in allf for f in fs]
+    best, bc = None, 0
+    for f in flat:
+        c = sum(1 for fs in allf if any(abs(g[0] - f[0]) < 0.04 * iw and abs(g[1] - f[1]) < 0.04 * ih for g in fs))
+        if c > bc:
+            best, bc = f, c
+    if best is not None and bc / nfr >= 0.4 and best[2] < 0.16 * ih and (best[0] > iw * 0.62 or best[0] < iw * 0.38):
+        near = np.array([f for f in flat if abs(f[0] - best[0]) < 0.04 * iw and abs(f[1] - best[1]) < 0.04 * ih])
+        cx, cy, fh = (float(np.median(near[:, k])) for k in range(3))
         bh = min(ih * 0.45, fh * 6.2); bw = min(iw, bh * 16 / 9)
-        x0 = cx - bw / 2; y0 = cy - bh * 0.5
-        # la facecam suele estar pegada a una esquina: ajustar a los bordes cercanos
-        if cx > iw * 0.66: x0 = iw - bw
-        elif cx < iw * 0.33: x0 = 0
-        if cy < ih * 0.33: y0 = 0
-        elif cy > ih * 0.66: y0 = ih - bh
-        x0 = int(np.clip(x0, 0, iw - bw)); y0 = int(np.clip(y0, 0, ih - bh))
-        return "split", (x0, y0, int(bw), int(bh))
+        x0 = iw - bw if cx > iw / 2 else 0
+        y0 = 0 if cy < ih / 2 else ih - bh
+        box = refine_box(video, (st + en) / 2, iw, ih, cx, cy, fh, int(x0), int(y0), int(bw), int(bh))
+        return "split", box
+    # 2) cámara a pantalla completa: cara grande detectada en buena parte del clip
+    big = [(tt, dd) for tt, dd in zip(times, det) if dd[2] >= 0.16 * ih]
+    if len(big) < 0.4 * nfr:
+        return None, None
+    times = [tt for tt, _ in big]; d = np.array([dd for _, dd in big])
     grid = np.arange(st, en, 1 / fps)
     cx = np.interp(grid, times, d[:, 0])
     k = int(fps * 1.2)
     cx = np.convolve(np.pad(cx, (k, k), mode="edge"), np.ones(2 * k + 1) / (2 * k + 1), mode="valid")
     return "face", cx
+
+
+def refine_box(video, t, iw, ih, cx, cy, fh, x0, y0, bw, bh):
+    """Ajusta el recuadro de la facecam buscando su marco (bordes fuertes y rectos)."""
+    import cv2
+    cap = cv2.VideoCapture(video); cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
+    ok, fr = cap.read(); cap.release()
+    if not ok:
+        return (x0, y0, bw, bh)
+    g = cv2.cvtColor(fr, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    gx = np.abs(cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=3))
+    gy = np.abs(cv2.Sobel(g, cv2.CV_32F, 0, 1, ksize=3))
+    right = cx > iw / 2; top = cy < ih / 2
+    # borde vertical interior (el lado hacia el centro de la pantalla)
+    ya, yb = (0, int(cy + 2.5 * fh)) if top else (int(cy - 2.5 * fh), ih)
+    ya, yb = max(0, ya), min(ih, yb)
+    if right:
+        xs = np.arange(int(max(0, cx - 7 * fh)), int(cx - 1.2 * fh))
+    else:
+        xs = np.arange(int(cx + 1.2 * fh), int(min(iw, cx + 7 * fh)))
+    if len(xs) > 5:
+        prof = gx[ya:yb, xs].mean(axis=0)
+        xe = int(xs[int(np.argmax(prof))])
+        if prof.max() > 3 * np.median(prof):
+            if right: x0, bw = xe, iw - xe
+            else: x0, bw = 0, xe
+    # borde horizontal interior
+    xa, xb = x0, x0 + bw
+    ys = np.arange(int(cy + 1.2 * fh), int(min(ih, cy + 5 * fh))) if top else np.arange(int(max(0, cy - 5 * fh)), int(cy - 1.2 * fh))
+    if len(ys) > 5:
+        prof = gy[ys, xa:xb].mean(axis=1)
+        ye = int(ys[int(np.argmax(prof))])
+        if prof.max() > 3 * np.median(prof):
+            if top: y0, bh = 0, ye
+            else: y0, bh = ye, ih - ye
+    return (int(x0), int(y0), int(max(32, bw)) // 2 * 2, int(max(32, bh)) // 2 * 2)
 
 
 def render_clip(video, st, en, out, iw, ih, fps, layout, ass_path, hook_text=None):
