@@ -36,6 +36,7 @@ pip install yt-dlp sherpa-onnx soundfile numpy pillow "opencv-python-headless<5"
 mkdir -p models && cd models
 curl -L https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-small.tar.bz2 | tar xj
 curl -LO https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx
+curl -L -o yunet.onnx https://huggingface.co/opencv/face_detection_yunet/resolve/main/face_detection_yunet_2023mar.onnx
 ```
 
 ## Permisos
