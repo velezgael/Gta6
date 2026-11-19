@@ -1,4 +1,4 @@
-# MODO LEONIDA: canal de YouTube sobre GTA 6
+# VAIZITY: canal de YouTube sobre GTA 6
 
 Diez vídeos listos para subir, con guion, voz, animaciones, música original, montaje, miniatura, subtítulos y ficha de subida.
 

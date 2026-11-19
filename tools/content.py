@@ -7,7 +7,7 @@ Una frase es un string, o un dict {"say": ..., "item": ...} donde "item"
 es lo que la plantilla muestra en pantalla cuando empieza esa frase.
 """
 
-CHANNEL = "MODO LEONIDA"
+CHANNEL = "VAIZITY"
 
 DISCLAIMER = (
     "Canal de fans, no afiliado a Rockstar Games ni a Take-Two Interactive. "

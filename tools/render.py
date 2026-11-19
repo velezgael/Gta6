@@ -431,7 +431,7 @@ class Renderer:
         for sc in timeline:
             for (a, b, text) in sc["lines"]:
                 self.subs += chunk_subs(a, b, text)
-        self.logo = text_img("MODO LEONIDA", "head", 34, fill="#ffffff", glow=self.pal["grid"], glow_r=8)
+        self.logo = text_img("VAIZITY", "head", 40, fill="#ffffff", glow=self.pal["grid"], glow_r=8)
 
     def frame(self, t):
         k = int(t * FPS) % LOOP
@@ -731,7 +731,7 @@ class Renderer:
             d = ImageDraw.Draw(im)
             d.polygon([(cx, cy), (cx, cy + 60), (cx + 16, cy + 46), (cx + 30, cy + 74), (cx + 40, cy + 69), (cx + 27, cy + 42), (cx + 46, cy + 42)],
                       fill=(255, 255, 255, 255), outline=(0, 0, 0, 255))
-        sub = text_img("Nuevo video de GTA 6 cada día", "bold", 46, fill="#ffffff")
+        sub = text_img("VAIZITY · Nuevo video de GTA 6 cada día", "bold", 46, fill="#ffffff")
         ps = ease_out(prog(lt, 0.9, 0.5))
         blit(im, sub, W / 2, 720, ps)
 
