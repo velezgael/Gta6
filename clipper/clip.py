@@ -319,14 +319,17 @@ def render_clip(video, st, en, out, iw, ih, fps, layout, ass_path, hook_text=Non
         cx = np.full(int((en - st) * fps) + 2, iw / 2)
     cap = cv2.VideoCapture(video)
     cap.set(cv2.CAP_PROP_POS_MSEC, st * 1000)
+    step = 2 if fps > 40 else 1  # salida a ~30 fps: mitad de peso, igual de fluido en móvil
     enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}",
-                            "-r", f"{fps:.3f}", "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+                            "-r", f"{fps / step:.3f}", "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
                             "-pix_fmt", "yuv420p", tmp], stdin=subprocess.PIPE)
     nfr = int((en - st) * fps)
     for i in range(nfr):
         ok, fr = cap.read()
         if not ok:
             break
+        if i % step:
+            continue
         if iw <= ih:  # ya es vertical
             canvas = cv2.resize(fr, (W, int(ih * W / iw)))
             canvas = canvas[(canvas.shape[0] - H) // 2:][:H] if canvas.shape[0] >= H else cv2.copyMakeBorder(
