@@ -1,6 +1,8 @@
 """Máquina de clips virales: video largo -> clips verticales 9:16 con subtítulos animados.
 
 Uso:
+  python3 clip.py "https://www.youtube.com/watch?v=..."       # enlace directo
+  python3 clip.py "https://www.twitch.tv/videos/..." --tramo 01:00:00-01:30:00
   python3 clip.py VIDEO.mp4                      # 5 clips, idioma auto
   python3 clip.py VIDEO.mp4 -n 8 --lang es --min 20 --max 50
   python3 clip.py VIDEO.mp4 --layout blur        # video completo con fondo difuminado (gameplay)
@@ -346,9 +348,24 @@ def suggest(ws):
     return title, tags, text
 
 
+def download(url, section=None):
+    """Descarga un enlace (YouTube, Twitch, Kick…) con yt-dlp a input/ (máx. 1080p)."""
+    os.makedirs(os.path.join(HERE, "input"), exist_ok=True)
+    tpl = os.path.join(HERE, "input", "%(uploader,channel)s_%(id)s" + ("_" + section.replace(":", "").replace("-", "_") if section else "") + ".%(ext)s")
+    cmd = [sys.executable, "-m", "yt_dlp", "-f", "bv*[height<=1080]+ba/b[height<=1080]/b", "--merge-output-format", "mp4",
+           "-o", tpl, "--print", "after_move:filepath", "--no-playlist", "--no-progress"]
+    if section:
+        cmd += ["--download-sections", "*" + section, "--force-keyframes-at-cuts"]
+    out = subprocess.run(cmd + [url], capture_output=True, text=True)
+    if out.returncode != 0:
+        sys.exit("No se pudo descargar: " + out.stderr.strip().splitlines()[-1] if out.stderr.strip() else "error desconocido")
+    return out.stdout.strip().splitlines()[-1]
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("video")
+    ap.add_argument("video", help="archivo de vídeo o enlace (YouTube, Twitch, Kick…)")
+    ap.add_argument("--tramo", help="solo descargar este tramo del enlace, p. ej. 01:00:00-01:30:00")
     ap.add_argument("-n", type=int, default=5, help="número de clips")
     ap.add_argument("--lang", default="", help="es, en… (vacío = automático)")
     ap.add_argument("--min", type=float, default=20)
@@ -357,6 +374,10 @@ def main():
     ap.add_argument("--at", action="append", help="momento concreto HH:MM:SS-HH:MM:SS (repetible)")
     ap.add_argument("--hook", action="store_true", help="texto gancho arriba los primeros segundos")
     a = ap.parse_args()
+    if re.match(r"https?://", a.video):
+        print("Descargando…", flush=True)
+        a.video = download(a.video, a.tramo)
+        print("Descargado:", a.video)
 
     name = re.sub(r"[^\w-]+", "_", os.path.splitext(os.path.basename(a.video))[0])[:40]
     od = os.path.join(HERE, "output", name)

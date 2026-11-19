@@ -14,6 +14,8 @@ Convierte un vídeo largo (directo, IRL, podcast, gameplay) en clips verticales 
 
 ```bash
 cd clipper
+python3 clip.py "https://www.youtube.com/watch?v=..."   # pegar un enlace (YouTube, Twitch, Kick)
+python3 clip.py "ENLACE" --tramo 01:00:00-01:30:00     # solo un tramo de un directo largo
 python3 clip.py mi_directo.mp4                       # 5 clips automáticos
 python3 clip.py mi_directo.mp4 -n 10 --lang es       # 10 clips, español
 python3 clip.py mi_directo.mp4 --min 15 --max 30     # clips más cortos
@@ -30,7 +32,7 @@ Los resultados quedan en `output/<nombre>/`:
 ## Instalación (una sola vez)
 
 ```bash
-pip install sherpa-onnx soundfile numpy pillow "opencv-python-headless<5"
+pip install yt-dlp sherpa-onnx soundfile numpy pillow "opencv-python-headless<5"
 mkdir -p models && cd models
 curl -L https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-small.tar.bz2 | tar xj
 curl -LO https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx
